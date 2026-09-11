@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>加工条件記録</title>
+
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#2C3B49">
+
+<!-- iOS Safari: ホーム画面に追加した際にフルスクリーンのアプリとして起動させる -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="加工記録">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png">
+
+<style>
+  :root{
+    --bg: #E7E4DA;
+    --surface: #FBFAF7;
+    --ink: #20241F;
+    --ink-soft: #5B5F57;
+    --steel: #3F5468;
+    --steel-dark: #2C3B49;
+    --rule: #C9C4B6;
+    --rule-strong: #A8A290;
+    --ok: #33703C;
+    --ok-bg: #E3EEE1;
+    --warn: #93650E;
+    --warn-bg: #F3E7CE;
+    --ng: #A23A31;
+    --ng-bg: #F2DFDA;
+    --mono: "SFMono-Regular", Consolas, "Courier New", monospace;
+    --sans: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", "Meiryo", sans-serif;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app{ max-width: 520px; margin: 0 auto; min-height: 100vh; background: var(--bg); position: relative; display:flex; flex-direction:column; }
+
+  /* Header */
+  header{
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--rule-strong);
+    background: var(--bg);
+    position: sticky; top:0; z-index: 5;
+  }
+  header h1{
+    margin:0; font-size: 19px; font-weight: 700; letter-spacing: .02em; color: var(--steel-dark);
+  }
+  header p{
+    margin: 4px 0 0; font-size: 12px; color: var(--ink-soft);
+  }
+  .header-top{
+    display:flex; align-items:flex-start; justify-content:space-between; gap: 10px;
+  }
+  .csv-actions{
+    display:flex; flex-direction:column; align-items:flex-end; gap: 2px; flex-shrink:0;
+  }
+  .csv-actions .link-btn{ font-size: 12px; padding: 2px; }
+  .csv-hint{ font-size: 11px; color: var(--ink-soft); margin-top: 6px; min-height: 14px; }
+  .csv-hint.error{ color: var(--ng); }
+
+  .export-panel{
+    margin-top: 12px; padding: 12px; border: 1px solid var(--rule-strong);
+    border-radius: 4px; background: var(--surface);
+  }
+  .export-panel .field{ margin-top: 12px; }
+  .export-panel .field:first-child{ margin-top: 0; }
+  .export-panel-actions{
+    display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-top: 14px;
+  }
+  .export-confirm-btn{ width:auto; flex:1; padding: 9px 0; font-size: 13px; }
+
+  /* Search */
+  .search-wrap{
+    padding: 12px 18px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+  }
+  .search-wrap input{
+    width:100%; padding: 10px 12px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    border-radius: 3px;
+    font-size: 14px;
+    font-family: var(--sans);
+    color: var(--ink);
+  }
+  .search-wrap input:focus{ outline: 2px solid var(--steel); outline-offset: 1px; }
+  .search-count{ font-size: 11px; color: var(--ink-soft); margin-top: 6px; font-family: var(--mono); }
+
+  /* Breadcrumb */
+  .crumb-bar{
+    display:flex; align-items:center; gap: 8px;
+    padding: 10px 18px; border-bottom: 1px solid var(--rule);
+    background: var(--bg);
+  }
+  .crumb-back{
+    background:none; border:none; color: var(--steel); font-size: 14px;
+    font-family: var(--sans); font-weight:700; cursor:pointer; padding: 2px 4px 2px 0;
+    flex-shrink:0;
+  }
+  .crumb-path{
+    font-size: 13px; font-weight:700; color: var(--steel-dark);
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+  }
+
+  /* Lists */
+  #list{ flex:1; padding: 0 0 90px; }
+  .empty{
+    padding: 60px 24px; text-align:center; color: var(--ink-soft); font-size: 13px; line-height:1.8;
+  }
+
+  /* Group rows (machines / projects levels) */
+  .group-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+  }
+  .group-row:active{ background: rgba(0,0,0,0.03); }
+  .group-name{ font-weight: 700; font-size: 15px; color: var(--steel-dark);
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+  }
+  .group-meta{ display:flex; align-items:center; gap: 10px; flex-shrink:0; margin-left: 10px; }
+  .group-count{ font-size: 11px; color: var(--ink-soft); font-family: var(--mono); }
+  .group-chevron{ color: var(--rule-strong); font-size: 16px; }
+
+  /* Record rows (records level / search results) */
+  .row{
+    padding: 8px 18px;
+    border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: pan-y;
+  }
+  .row:active{ background: rgba(0,0,0,0.03); }
+  .row-context{
+    font-size: 10px; color: var(--ink-soft); margin-bottom: 3px;
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+  }
+  .row-top{
+    display:flex; align-items:center; justify-content: space-between;
+    margin-bottom: 3px; gap: 8px;
+  }
+  .row-machine{
+    font-weight: 700; font-size: 13px; color: var(--steel-dark);
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+  }
+  .row-top-right{ display:flex; align-items:center; gap: 6px; flex-shrink:0; }
+  .row-date{
+    font-weight: 400; font-size: 11px; color: var(--ink-soft);
+    font-family: var(--mono);
+  }
+  .badge{
+    flex-shrink:0;
+    width: 20px; height: 20px; border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 11px; font-weight: 700; font-family: var(--mono);
+  }
+  .badge.ok{ background: var(--ok-bg); color: var(--ok); }
+  .badge.warn{ background: var(--warn-bg); color: var(--warn); }
+  .badge.ng{ background: var(--ng-bg); color: var(--ng); }
+  .row-fields{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap: 1px 10px;
+  }
+  .row-fields .rf-full{ grid-column: span 3; }
+  .rf-pair{
+    font-size: 11px; font-family: var(--mono); color: var(--ink);
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+    line-height: 1.5;
+  }
+  .rf-pair .rf-label{
+    font-family: var(--sans); font-size: 9px; color: var(--ink-soft);
+  }
+
+  /* FAB */
+  .fab{
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(calc(-50% + 210px));
+    width: 54px; height: 54px; border-radius: 50%;
+    background: var(--steel-dark); color: #fff;
+    border:none; font-size: 26px; line-height: 1;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    z-index: 6; cursor:pointer;
+  }
+  @media (max-width: 520px){
+    .fab{ transform: none; right: 20px; left: auto; }
+  }
+  .fab:active{ background: var(--steel); }
+
+  /* Overlay form */
+  #overlay{
+    position: fixed; inset:0; background: var(--bg);
+    max-width: 520px; margin: 0 auto;
+    transform: translateY(100%);
+    transition: transform .22s ease;
+    z-index: 20;
+    display:flex; flex-direction:column;
+  }
+  #overlay.open{ transform: translateY(0); }
+  .form-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 18px; border-bottom: 1px solid var(--rule-strong);
+  }
+  .form-header h2{ margin:0; font-size: 16px; font-weight:700; color: var(--steel-dark); }
+  .link-btn{
+    background:none; border:none; font-size: 14px; color: var(--steel); font-family: var(--sans); cursor:pointer; padding: 4px 2px;
+  }
+  .link-btn.danger{ color: var(--ng); }
+
+  .form-body{ flex:1; overflow-y:auto; padding: 6px 18px 24px; }
+
+  .field{ margin-top: 18px; }
+  .field-row{ display:flex; gap: 10px; }
+  .field-row .field{ margin-top: 18px; }
+  .field.narrow{ flex: 0 0 78px; }
+  .field.grow{ flex: 1; min-width: 0; }
+  .field label{
+    display:block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; font-weight: 600;
+  }
+  .field input, .field textarea, .field select{
+    width:100%; padding: 10px 11px;
+    border: 1px solid var(--rule-strong); background: var(--surface);
+    border-radius: 3px; font-size: 14px; color: var(--ink); font-family: var(--sans);
+  }
+  .field select{ -webkit-appearance: none; appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(1.1em), calc(100% - 13px) calc(1.1em);
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  }
+  .field textarea{ resize: vertical; line-height: 1.5; }
+  .field input.numeric{ font-family: var(--mono); }
+  .field input:focus, .field textarea:focus, .field select:focus{ outline: 2px solid var(--steel); outline-offset: 1px; }
+
+  .section-title{
+    margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--rule);
+    font-size: 12px; letter-spacing: .04em; color: var(--steel-dark); font-weight: 700;
+  }
+
+  .cond-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+
+  /* Evaluation tabs */
+  .eval-tabs{ display:flex; gap: 8px; margin-top: 8px; }
+  .eval-tab{
+    flex:1; padding: 12px 0; text-align:center; border-radius: 3px;
+    border: 1px solid var(--rule-strong); background: var(--surface);
+    font-size: 18px; font-weight:700; font-family: var(--mono); color: var(--ink-soft);
+    cursor:pointer;
+  }
+  .eval-tab[data-v="ok"].active{ background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+  .eval-tab[data-v="warn"].active{ background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  .eval-tab[data-v="ng"].active{ background: var(--ng-bg); color: var(--ng); border-color: var(--ng); }
+
+  .save-bar{
+    padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--rule-strong);
+    background: var(--bg);
+  }
+  .save-btn{
+    width:100%; padding: 13px 0; border:none; border-radius: 3px;
+    background: var(--steel-dark); color:#fff; font-size: 15px; font-weight:700;
+    font-family: var(--sans); cursor:pointer;
+  }
+  .save-btn:active{ background: var(--steel); }
+  .hint{ font-size: 11px; color: var(--ink-soft); margin-top: 6px; text-align:center; }
+
+  .storage-banner{
+    display:none; padding: 10px 18px; background: var(--ng-bg); color: var(--ng);
+    font-size: 12px; line-height:1.6; border-bottom: 1px solid var(--ng);
+    position: sticky; top:0; z-index: 10;
+  }
+  .storage-banner.show{ display:block; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="storage-banner" id="storageBanner"></div>
+
+  <header>
+    <div class="header-top">
+      <div>
+        <h1>加工条件記録</h1>
+        <p>加工機ごとの条件と評価を記録します</p>
+      </div>
+      <div class="csv-actions">
+        <button class="link-btn" id="exportBtn">CSV書き出し</button>
+        <button class="link-btn" id="importBtn">CSV読み込み</button>
+        <input type="file" id="importFile" accept=".csv,text/csv" style="display:none;">
+      </div>
+    </div>
+    <div class="csv-hint" id="csvHint"></div>
+
+    <div class="export-panel" id="exportPanel" style="display:none;">
+      <div class="field">
+        <label for="exportScope">書き出す範囲</label>
+        <select id="exportScope">
+          <option value="all">すべての記録</option>
+          <option value="machine">加工機の種類で絞る</option>
+          <option value="project">案件で絞る</option>
+        </select>
+      </div>
+      <div class="field" id="exportMachineField" style="display:none;">
+        <label for="exportMachineSelect">加工機の種類</label>
+        <select id="exportMachineSelect"></select>
+      </div>
+      <div class="field" id="exportProjectField" style="display:none;">
+        <label for="exportProjectSelect">案件</label>
+        <select id="exportProjectSelect"></select>
+      </div>
+      <div class="export-panel-actions">
+        <button class="link-btn" id="exportCancelBtn">キャンセル</button>
+        <button class="save-btn export-confirm-btn" id="exportConfirmBtn">この範囲で書き出す</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="search-wrap">
+    <input id="searchInput" type="text" placeholder="機種・案件・製品・ツール・条件などで検索" autocomplete="off">
+    <div class="search-count" id="searchCount"></div>
+  </div>
+
+  <div class="crumb-bar" id="crumbBar" style="display:none;">
+    <button class="crumb-back" id="crumbBack">‹ 戻る</button>
+    <div class="crumb-path" id="crumbPath"></div>
+  </div>
+
+  <div id="list"></div>
+
+  <button class="fab" id="addBtn" aria-label="新規記録">+</button>
+
+  <div id="overlay">
+    <div class="form-header">
+      <button class="link-btn" id="cancelBtn">キャンセル</button>
+      <h2 id="formTitle">新規記録</h2>
+      <button class="link-btn danger" id="deleteBtn" style="visibility:hidden;">削除</button>
+    </div>
+    <div class="form-body">
+      <div class="field">
+        <label for="f-project">案件</label>
+        <input id="f-project" type="text" placeholder="例：〇〇社向け量産案件">
+      </div>
+      <div class="field">
+        <label for="f-machine">加工機の種類</label>
+        <input id="f-machine" type="text" placeholder="例：マシニングセンタ / 旋盤">
+      </div>
+      <div class="field-row">
+        <div class="field narrow">
+          <label for="f-worknum">No.</label>
+          <select id="f-worknum"></select>
+        </div>
+        <div class="field grow">
+          <label for="f-product">製品（ワーク）</label>
+          <input id="f-product" type="text" placeholder="例：フランジ部品 A-102">
+        </div>
+      </div>
+      <div class="field">
+        <label for="f-dim">製品寸法</label>
+        <input id="f-dim" class="numeric" type="text" placeholder="例：Φ20 × 50mm">
+      </div>
+      <div class="field">
+        <label for="f-tool">使用ツール</label>
+        <input id="f-tool" type="text" placeholder="例：超硬エンドミル 10mm">
+      </div>
+      <div class="field">
+        <label for="f-toolspec">刃物径／刃厚またはドラム径／硬度</label>
+        <input id="f-toolspec" class="numeric" type="text" placeholder="例：Φ10 / 1.5mm / HRC60">
+      </div>
+
+      <div class="section-title">加工条件</div>
+      <div class="cond-grid">
+        <div class="field">
+          <label for="f-feed">送り速度</label>
+          <input id="f-feed" class="numeric" type="text" placeholder="mm/min">
+        </div>
+        <div class="field">
+          <label for="f-speed">回転数／速度</label>
+          <input id="f-speed" class="numeric" type="text" placeholder="rpm または m/min">
+        </div>
+      </div>
+      <div class="field">
+        <label for="f-cut">切削量</label>
+        <input id="f-cut" class="numeric" type="text" placeholder="mm（切込み量など）">
+      </div>
+      <div class="field">
+        <label for="f-load">負荷</label>
+        <input id="f-load" class="numeric" type="text" placeholder="例：60%、主軸負荷など">
+      </div>
+
+      <div class="section-title">メモ</div>
+      <div class="field">
+        <label for="f-memo">メモ</label>
+        <textarea id="f-memo" rows="3" placeholder="気づいた点や補足事項"></textarea>
+      </div>
+      <div class="field">
+        <label for="f-memo2">メモ2</label>
+        <textarea id="f-memo2" rows="3" placeholder="気づいた点や補足事項（自由記述）"></textarea>
+      </div>
+
+      <div class="section-title">評価</div>
+      <div class="eval-tabs">
+        <div class="eval-tab" data-v="ok">◯</div>
+        <div class="eval-tab" data-v="warn">▲</div>
+        <div class="eval-tab" data-v="ng">×</div>
+      </div>
+    </div>
+    <div class="save-bar">
+      <button class="save-btn" id="saveBtn">保存</button>
+      <div class="hint" id="saveHint"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'records';
+  const NO_MACHINE = '（機種未設定）';
+  const NO_PROJECT = '（案件未設定）';
+  let records = [];
+  let editingId = null;
+  let currentEval = null;
+
+  // ナビゲーション状態： 'machines' -> 'projects' -> 'records'
+  let level = 'machines';
+  let curMachine = null;
+  let curProject = null;
+
+  const listEl = document.getElementById('list');
+  const searchInput = document.getElementById('searchInput');
+  const searchCount = document.getElementById('searchCount');
+  const crumbBar = document.getElementById('crumbBar');
+  const crumbPath = document.getElementById('crumbPath');
+  const crumbBack = document.getElementById('crumbBack');
+  const overlay = document.getElementById('overlay');
+  const formTitle = document.getElementById('formTitle');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const saveHint = document.getElementById('saveHint');
+
+  const fields = {
+    project: document.getElementById('f-project'),
+    machine: document.getElementById('f-machine'),
+    workNumber: document.getElementById('f-worknum'),
+    product: document.getElementById('f-product'),
+    dim: document.getElementById('f-dim'),
+    tool: document.getElementById('f-tool'),
+    toolspec: document.getElementById('f-toolspec'),
+    feed: document.getElementById('f-feed'),
+    speed: document.getElementById('f-speed'),
+    cut: document.getElementById('f-cut'),
+    load: document.getElementById('f-load'),
+    memo: document.getElementById('f-memo'),
+    memo2: document.getElementById('f-memo2'),
+  };
+
+  // ワークナンバー：1〜50のプルダウン
+  (function initWorkNumberOptions(){
+    const sel = fields.workNumber;
+    const blank = document.createElement('option');
+    blank.value = ''; blank.textContent = '未選択';
+    sel.appendChild(blank);
+    for(let i = 1; i <= 50; i++){
+      const opt = document.createElement('option');
+      opt.value = String(i); opt.textContent = String(i);
+      sel.appendChild(opt);
+    }
+  })();
+
+  const evalTabs = Array.from(document.querySelectorAll('.eval-tab'));
+  const evalLabel = { ok: '◯', warn: '▲', ng: '×' };
+  const evalClass = { ok: 'ok', warn: 'warn', ng: 'ng' };
+
+  function evalBadgeHtml(v){
+    if(!v) return '';
+    return `<div class="badge ${evalClass[v]}">${evalLabel[v]}</div>`;
+  }
+
+  const storageBanner = document.getElementById('storageBanner');
+
+  function showBanner(msg){
+    storageBanner.textContent = msg;
+    storageBanner.classList.add('show');
+  }
+  function hideBanner(){
+    storageBanner.classList.remove('show');
+    storageBanner.textContent = '';
+  }
+
+  // この端末のブラウザ内（localStorage）にのみ保存する。ネットワーク通信は行わない。
+  function checkStorageAvailable(){
+    try{
+      const t = '__storage_test__';
+      window.localStorage.setItem(t, '1');
+      window.localStorage.removeItem(t);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+  const storageAvailable = checkStorageAvailable();
+
+  if(!storageAvailable){
+    showBanner('この端末・ブラウザでは保存機能を利用できません（プライベートブラウズ中など）。記録は保存されません。');
+  }
+
+  async function loadRecords(){
+    if(!storageAvailable){
+      records = [];
+      render();
+      return;
+    }
+    try{
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      records = raw ? JSON.parse(raw) : [];
+      hideBanner();
+    }catch(e){
+      records = [];
+      showBanner('保存されたデータの読み込みに失敗しました。');
+    }
+    render();
+  }
+
+  async function persist(){
+    if(!storageAvailable){
+      showBanner('保存機能が利用できないため、この記録は保存されていません。');
+      return false;
+    }
+    const payload = JSON.stringify(records);
+    try{
+      window.localStorage.setItem(STORAGE_KEY, payload);
+      const check = window.localStorage.getItem(STORAGE_KEY);
+      if(check === payload){
+        hideBanner();
+        return true;
+      }
+    }catch(e){
+      // fall through to failure message below
+    }
+    showBanner('記録の保存に失敗しました（端末の空き容量をご確認ください）。');
+    saveHint.textContent = '保存に失敗しました。もう一度お試しください。';
+    return false;
+  }
+
+  function formatDate(ts){
+    if(!ts) return '';
+    const d = new Date(ts);
+    if(isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+  }
+  function formatTime(ts){
+    if(!ts) return '';
+    const d = new Date(ts);
+    if(isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2,'0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ---------------- Navigation (history-backed) ---------------- */
+
+  function applyState(state){
+    const s = state || { view: 'machines' };
+    if(overlay.classList.contains('open')) overlay.classList.remove('open');
+    level = s.view === 'form' ? (s.level || 'machines') : (s.view || 'machines');
+    curMachine = s.machine || null;
+    curProject = s.project || null;
+    render();
+  }
+
+  window.addEventListener('popstate', (e) => {
+    applyState(e.state);
+  });
+
+  function goMachines(){
+    level = 'machines'; curMachine = null; curProject = null;
+    history.pushState({ view: 'machines' }, '', location.href);
+    render();
+  }
+  function goProjects(machine){
+    level = 'projects'; curMachine = machine; curProject = null;
+    history.pushState({ view: 'projects', machine }, '', location.href);
+    render();
+  }
+  function goRecords(machine, project){
+    level = 'records'; curMachine = machine; curProject = project;
+    history.pushState({ view: 'records', machine, project }, '', location.href);
+    render();
+  }
+
+  crumbBack.addEventListener('click', () => history.back());
+
+  /* ---------------- Rendering ---------------- */
+
+  function rf(label, value, full){
+    const has = value !== undefined && value !== null && String(value).trim();
+    if(!has) return '';
+    return `<div class="rf-pair ${full ? 'rf-full' : ''}">
+      <span class="rf-label">${label} </span>${escapeHtml(value)}
+    </div>`;
+  }
+
+  function recordRowHtml(r, opts){
+    opts = opts || {};
+    const titleLeft = (r.workNumber ? `No.${escapeHtml(r.workNumber)} ` : '') + escapeHtml(r.product || '（製品未入力）');
+    const contextLine = opts.showContext
+      ? `<div class="row-context">${escapeHtml(r.machine || NO_MACHINE)} ▸ ${escapeHtml(r.project || NO_PROJECT)}　${formatDate(r.createdAt)}</div>`
+      : '';
+    return `
+      <div class="row" data-id="${r.id}">
+        ${contextLine}
+        <div class="row-top">
+          <div class="row-machine">${titleLeft}</div>
+          <div class="row-top-right">
+            <span class="row-date">${formatTime(r.createdAt)}</span>
+            ${evalBadgeHtml(r.evaluation)}
+          </div>
+        </div>
+        <div class="row-fields">
+          ${rf('寸法', r.dim, true)}
+          ${rf('ツール', r.tool, true)}
+          ${rf('刃物径/刃厚・ドラム径/硬度', r.toolspec, true)}
+          ${rf('送り', r.feed)}
+          ${rf('回転/速度', r.speed)}
+          ${rf('切削量', r.cut)}
+          ${rf('負荷', r.load)}
+          ${rf('メモ', r.memo, true)}
+          ${rf('メモ2', r.memo2, true)}
+        </div>
+      </div>
+    `;
+  }
+
+  function attachRecordRowHandlers(){
+    listEl.querySelectorAll('.row[data-id]').forEach(row => {
+      let pressTimer = null;
+      let longPressFired = false;
+      let startX = 0, startY = 0;
+      const LONG_PRESS_MS = 550;
+      const MOVE_TOLERANCE = 10;
+
+      const clearPressTimer = () => {
+        if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+      };
+
+      row.addEventListener('pointerdown', (e) => {
+        if(e.pointerType === 'mouse' && e.button !== 0) return;
+        longPressFired = false;
+        startX = e.clientX; startY = e.clientY;
+        clearPressTimer();
+        pressTimer = setTimeout(() => {
+          longPressFired = true;
+          pressTimer = null;
+          if(navigator.vibrate) navigator.vibrate(15);
+          openFormDuplicate(row.getAttribute('data-id'));
+        }, LONG_PRESS_MS);
+      });
+
+      row.addEventListener('pointermove', (e) => {
+        if(!pressTimer) return;
+        if(Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE){
+          clearPressTimer();
+        }
+      });
+
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => {
+        row.addEventListener(evt, clearPressTimer);
+      });
+
+      row.addEventListener('contextmenu', (e) => e.preventDefault());
+
+      row.addEventListener('click', () => {
+        if(longPressFired){ longPressFired = false; return; }
+        openForm(row.getAttribute('data-id'));
+      });
+    });
+  }
+
+  function latestDate(list){
+    return list.reduce((max, r) => Math.max(max, r.createdAt || 0), 0);
+  }
+
+  function groupBy(list, keyFn, placeholder){
+    const map = new Map();
+    list.forEach(r => {
+      const key = (keyFn(r) || '').trim() || placeholder;
+      if(!map.has(key)) map.set(key, []);
+      map.get(key).push(r);
+    });
+    return map;
+  }
+
+  function sortGroupKeys(keys, placeholder){
+    const real = keys.filter(k => k !== placeholder).sort((a,b) => a.localeCompare(b, 'ja'));
+    return keys.includes(placeholder) ? [...real, placeholder] : real;
+  }
+
+  function renderMachinesList(){
+    crumbBar.style.display = 'none';
+    if(records.length === 0){
+      listEl.innerHTML = `<div class="empty">記録がまだありません。右下の + から追加してください。</div>`;
+      return;
+    }
+    const groups = groupBy(records, r => r.machine, NO_MACHINE);
+    const keys = sortGroupKeys(Array.from(groups.keys()), NO_MACHINE);
+    listEl.innerHTML = keys.map(k => `
+      <div class="group-row" data-machine="${escapeHtml(k)}">
+        <div class="group-name">${escapeHtml(k)}</div>
+        <div class="group-meta">
+          <span class="group-count">${groups.get(k).length}件</span>
+          <span class="group-chevron">›</span>
+        </div>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.group-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const m = row.getAttribute('data-machine');
+        goProjects(m === NO_MACHINE ? '' : m);
+      });
+    });
+  }
+
+  function renderProjectsList(){
+    crumbBar.style.display = 'flex';
+    crumbPath.textContent = curMachine || NO_MACHINE;
+    const scoped = records.filter(r => (r.machine || '').trim() === (curMachine || '').trim());
+    if(scoped.length === 0){
+      listEl.innerHTML = `<div class="empty">この加工機の記録がありません。</div>`;
+      return;
+    }
+    const groups = groupBy(scoped, r => r.project, NO_PROJECT);
+    const keys = sortGroupKeys(Array.from(groups.keys()), NO_PROJECT);
+    listEl.innerHTML = keys.map(k => `
+      <div class="group-row" data-project="${escapeHtml(k)}">
+        <div class="group-name">${escapeHtml(k)}</div>
+        <div class="group-meta">
+          <span class="group-count">${formatDate(latestDate(groups.get(k)))}</span>
+          <span class="group-chevron">›</span>
+        </div>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.group-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const p = row.getAttribute('data-project');
+        goRecords(curMachine, p === NO_PROJECT ? '' : p);
+      });
+    });
+  }
+
+  function renderRecordsList(){
+    crumbBar.style.display = 'flex';
+    crumbPath.textContent = `${curMachine || NO_MACHINE} ▸ ${curProject || NO_PROJECT}`;
+    const scoped = records.filter(r =>
+      (r.machine || '').trim() === (curMachine || '').trim() &&
+      (r.project || '').trim() === (curProject || '').trim()
+    );
+    if(scoped.length === 0){
+      listEl.innerHTML = `<div class="empty">この案件の記録がありません。右下の + から追加してください。</div>`;
+      return;
+    }
+    const sorted = [...scoped].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    listEl.innerHTML = sorted.map(r => recordRowHtml(r, { showContext: false })).join('');
+    attachRecordRowHandlers();
+  }
+
+  function renderSearchResults(q){
+    crumbBar.style.display = 'none';
+    const query = q.toLowerCase();
+    const filtered = records.filter(r => {
+      const hay = [
+        r.machine, r.project, r.workNumber, r.product, r.dim, r.tool, r.toolspec,
+        r.feed, r.speed, r.cut, r.load, r.memo, r.memo2,
+        formatDate(r.createdAt), formatTime(r.createdAt),
+        r.evaluation ? evalLabel[r.evaluation] : ''
+      ].join(' ').toLowerCase();
+      return hay.includes(query);
+    });
+
+    searchCount.textContent = `${filtered.length} 件 / 全 ${records.length} 件`;
+
+    if(filtered.length === 0){
+      listEl.innerHTML = `<div class="empty">一致する記録が見つかりません。</div>`;
+      return;
+    }
+    const sorted = [...filtered].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    listEl.innerHTML = sorted.map(r => recordRowHtml(r, { showContext: true })).join('');
+    attachRecordRowHandlers();
+  }
+
+  function render(){
+    const q = searchInput.value.trim();
+    if(q){
+      renderSearchResults(q);
+      return;
+    }
+    searchCount.textContent = records.length ? `全 ${records.length} 件` : '';
+
+    if(level === 'projects' && curMachine === null){ level = 'machines'; }
+    if(level === 'records' && (curMachine === null || curProject === null)){ level = 'machines'; }
+
+    if(level === 'machines') renderMachinesList();
+    else if(level === 'projects') renderProjectsList();
+    else renderRecordsList();
+  }
+
+  searchInput.addEventListener('input', render);
+
+  /* ---------------- Form (add / edit / duplicate) ---------------- */
+
+  function setEval(v){
+    currentEval = v;
+    evalTabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-v') === v));
+  }
+
+  evalTabs.forEach(t => {
+    t.addEventListener('click', () => setEval(t.getAttribute('data-v')));
+  });
+
+  function fillFieldsFromRecord(r){
+    fields.project.value = r.project || '';
+    fields.machine.value = r.machine || '';
+    fields.workNumber.value = r.workNumber || '';
+    fields.product.value = r.product || '';
+    fields.dim.value = r.dim || '';
+    fields.tool.value = r.tool || '';
+    fields.toolspec.value = r.toolspec || '';
+    fields.feed.value = r.feed || '';
+    fields.speed.value = r.speed || '';
+    fields.cut.value = r.cut || '';
+    fields.load.value = r.load || '';
+    fields.memo.value = r.memo || '';
+    fields.memo2.value = r.memo2 || '';
+    setEval(r.evaluation || null);
+  }
+
+  function clearFields(){
+    Object.values(fields).forEach(f => f.value = '');
+    setEval(null);
+  }
+
+  function pushFormState(){
+    history.pushState({ view: 'form', level, machine: curMachine, project: curProject }, '', location.href);
+  }
+
+  function openForm(id){
+    saveHint.textContent = '';
+    if(id){
+      const r = records.find(r => r.id === id);
+      if(!r) return;
+      editingId = id;
+      formTitle.textContent = '記録の編集';
+      deleteBtn.style.visibility = 'visible';
+      fillFieldsFromRecord(r);
+    } else {
+      editingId = null;
+      formTitle.textContent = '新規記録';
+      deleteBtn.style.visibility = 'hidden';
+      clearFields();
+      // 現在のドリルダウン位置があれば案件・加工機を初期値として入れておく
+      if(level === 'projects' || level === 'records'){ fields.machine.value = curMachine || ''; }
+      if(level === 'records'){ fields.project.value = curProject || ''; }
+    }
+    pushFormState();
+    overlay.classList.add('open');
+  }
+
+  function openFormDuplicate(id){
+    const r = records.find(r => r.id === id);
+    if(!r) return;
+    saveHint.textContent = '';
+    editingId = null;
+    formTitle.textContent = '新規記録（同条件）';
+    deleteBtn.style.visibility = 'hidden';
+    fillFieldsFromRecord(r);
+    const n = parseInt(r.workNumber, 10);
+    if(!isNaN(n)){
+      fields.workNumber.value = String(Math.min(n + 1, 50));
+    }
+    pushFormState();
+    overlay.classList.add('open');
+  }
+
+  function closeFormViaHistory(){
+    // オーバーレイの状態は history のポップに合わせて popstate ハンドラが閉じる
+    history.back();
+  }
+
+  document.getElementById('addBtn').addEventListener('click', () => openForm(null));
+  document.getElementById('cancelBtn').addEventListener('click', closeFormViaHistory);
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const project = fields.project.value.trim();
+    const machine = fields.machine.value.trim();
+    const product = fields.product.value.trim();
+
+    if(!machine && !product){
+      saveHint.textContent = '加工機の種類または製品名を入力してください。';
+      return;
+    }
+
+    const now = Date.now();
+    const payload = {
+      project, machine,
+      workNumber: fields.workNumber.value,
+      product,
+      dim: fields.dim.value.trim(),
+      tool: fields.tool.value.trim(),
+      toolspec: fields.toolspec.value.trim(),
+      feed: fields.feed.value.trim(),
+      speed: fields.speed.value.trim(),
+      cut: fields.cut.value.trim(),
+      load: fields.load.value.trim(),
+      memo: fields.memo.value.trim(),
+      memo2: fields.memo2.value.trim(),
+      evaluation: currentEval,
+    };
+
+    if(editingId){
+      const r = records.find(r => r.id === editingId);
+      Object.assign(r, payload, { updatedAt: now });
+    } else {
+      records.push(Object.assign({
+        id: 'r_' + now + '_' + Math.random().toString(36).slice(2,8),
+        createdAt: now,
+        updatedAt: now
+      }, payload));
+    }
+
+    await persist();
+    closeFormViaHistory();
+  });
+
+  deleteBtn.addEventListener('click', async () => {
+    if(!editingId) return;
+    records = records.filter(r => r.id !== editingId);
+    await persist();
+    closeFormViaHistory();
+  });
+
+  /* ---------------- CSV export / import ---------------- */
+  const csvHint = document.getElementById('csvHint');
+  const CSV_COLUMNS = [
+    ['recordDate', '記録日'],
+    ['recordTime', '記録時刻'],
+    ['project', '案件'],
+    ['machine', '加工機の種類'],
+    ['workNumber', 'ワークナンバー'],
+    ['product', '製品（ワーク）'],
+    ['dim', '製品寸法'],
+    ['tool', '使用ツール'],
+    ['toolspec', '刃物径／刃厚またはドラム径／硬度'],
+    ['feed', '送り速度'],
+    ['speed', '回転数／速度'],
+    ['cut', '切削量'],
+    ['load', '負荷'],
+    ['memo', 'メモ'],
+    ['memo2', 'メモ2'],
+    ['evaluation', '評価'],
+  ];
+  const evalToSymbol = { ok: '◯', warn: '▲', ng: '×' };
+  const symbolToEval = { '◯': 'ok', '○': 'ok', '〇': 'ok', '▲': 'warn', '△': 'warn', '×': 'ng', 'ok': 'ok', 'warn': 'warn', 'ng': 'ng' };
+
+  function csvEscape(v){
+    const s = v === undefined || v === null ? '' : String(v);
+    if(/[",\n\r]/.test(s)){
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  async function exportCsv(targetRecords, scopeLabel){
+    if(targetRecords.length === 0){
+      csvHint.textContent = '書き出す記録がありません。';
+      csvHint.classList.add('error');
+      return;
+    }
+    const header = CSV_COLUMNS.map(c => c[1]);
+    const lines = [header.map(csvEscape).join(',')];
+    targetRecords.forEach(r => {
+      const row = CSV_COLUMNS.map(([key]) => {
+        if(key === 'evaluation') return evalToSymbol[r.evaluation] || '';
+        if(key === 'recordDate') return formatDate(r.createdAt);
+        if(key === 'recordTime') return formatTime(r.createdAt);
+        return r[key] || '';
+      });
+      lines.push(row.map(csvEscape).join(','));
+    });
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const ts = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const safeLabel = scopeLabel ? '_' + scopeLabel.replace(/[\\/:*?"<>|]/g, '_') : '';
+    const filename = `machining-log${safeLabel}_${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}.csv`;
+
+    if(window.showSaveFilePicker){
+      try{
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'CSVファイル', accept: { 'text/csv': ['.csv'] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        csvHint.classList.remove('error');
+        csvHint.textContent = `${targetRecords.length} 件をCSVに書き出しました。`;
+      }catch(err){
+        if(err && err.name === 'AbortError'){
+          csvHint.classList.remove('error');
+          csvHint.textContent = '';
+        } else {
+          csvHint.classList.add('error');
+          csvHint.textContent = '保存に失敗しました。もう一度お試しください。';
+        }
+      }
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    csvHint.classList.remove('error');
+    csvHint.textContent = `${targetRecords.length} 件をCSVに書き出しました（ダウンロードフォルダに保存されます）。`;
+  }
+
+  function parseCsv(text){
+    if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for(let i = 0; i < text.length; i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else {
+        if(c === '"'){ inQuotes = true; }
+        else if(c === ','){ row.push(field); field = ''; }
+        else if(c === '\r'){ /* skip */ }
+        else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+        else { field += c; }
+      }
+    }
+    if(field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+    return rows.filter(r => !(r.length === 1 && r[0] === ''));
+  }
+
+  async function importCsvText(text){
+    const rows = parseCsv(text);
+    if(rows.length < 2){
+      csvHint.classList.add('error');
+      csvHint.textContent = 'インポートできる記録が見つかりませんでした。';
+      return;
+    }
+    const header = rows[0].map(h => h.trim());
+    const colIndex = {};
+    CSV_COLUMNS.forEach(([key, label]) => {
+      let idx = header.indexOf(label);
+      if(idx === -1) idx = header.indexOf(key);
+      colIndex[key] = idx;
+    });
+
+    const now = Date.now();
+    let count = 0;
+    for(let i = 1; i < rows.length; i++){
+      const cols = rows[i];
+      if(cols.every(c => c.trim() === '')) continue;
+      const rec = { id: 'r_' + now + '_' + Math.random().toString(36).slice(2,8), createdAt: now, updatedAt: now };
+      let dateStr = '', timeStr = '';
+      CSV_COLUMNS.forEach(([key]) => {
+        const idx = colIndex[key];
+        const raw = idx !== -1 && idx !== undefined ? (cols[idx] || '').trim() : '';
+        if(key === 'evaluation'){
+          rec.evaluation = symbolToEval[raw] || null;
+        } else if(key === 'recordDate'){
+          dateStr = raw;
+        } else if(key === 'recordTime'){
+          timeStr = raw;
+        } else {
+          rec[key] = raw;
+        }
+      });
+      if(dateStr){
+        const combined = new Date(`${dateStr.replace(/\//g, '-')}T${timeStr || '00:00'}:00`);
+        if(!isNaN(combined.getTime())) rec.createdAt = combined.getTime();
+      }
+      if(!rec.machine && !rec.product) continue;
+      records.push(rec);
+      count++;
+    }
+
+    if(count === 0){
+      csvHint.classList.add('error');
+      csvHint.textContent = 'インポートできる記録が見つかりませんでした。';
+      return;
+    }
+    await persist();
+    render();
+    csvHint.classList.remove('error');
+    csvHint.textContent = `${count} 件をCSVから追加しました。`;
+  }
+
+  const exportPanel = document.getElementById('exportPanel');
+  const exportScope = document.getElementById('exportScope');
+  const exportMachineField = document.getElementById('exportMachineField');
+  const exportProjectField = document.getElementById('exportProjectField');
+  const exportMachineSelect = document.getElementById('exportMachineSelect');
+  const exportProjectSelect = document.getElementById('exportProjectSelect');
+
+  function distinctValues(keyFn){
+    const set = new Set();
+    records.forEach(r => {
+      const v = (keyFn(r) || '').trim();
+      if(v) set.add(v);
+    });
+    return Array.from(set).sort((a,b) => a.localeCompare(b, 'ja'));
+  }
+
+  function fillSelectOptions(sel, values){
+    sel.innerHTML = values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  }
+
+  function updateExportScopeFields(){
+    const scope = exportScope.value;
+    exportMachineField.style.display = scope === 'machine' ? 'block' : 'none';
+    exportProjectField.style.display = scope === 'project' ? 'block' : 'none';
+  }
+
+  exportScope.addEventListener('change', updateExportScopeFields);
+
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    csvHint.textContent = '';
+    csvHint.classList.remove('error');
+    fillSelectOptions(exportMachineSelect, distinctValues(r => r.machine));
+    fillSelectOptions(exportProjectSelect, distinctValues(r => r.project));
+    exportScope.value = 'all';
+    updateExportScopeFields();
+    exportPanel.style.display = exportPanel.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('exportCancelBtn').addEventListener('click', () => {
+    exportPanel.style.display = 'none';
+  });
+
+  document.getElementById('exportConfirmBtn').addEventListener('click', () => {
+    const scope = exportScope.value;
+    let targetRecords = records;
+    let scopeLabel = '';
+    if(scope === 'machine'){
+      const m = exportMachineSelect.value;
+      if(!m){
+        csvHint.classList.add('error');
+        csvHint.textContent = '加工機の種類を選択してください。';
+        return;
+      }
+      targetRecords = records.filter(r => (r.machine || '').trim() === m);
+      scopeLabel = m;
+    } else if(scope === 'project'){
+      const p = exportProjectSelect.value;
+      if(!p){
+        csvHint.classList.add('error');
+        csvHint.textContent = '案件を選択してください。';
+        return;
+      }
+      targetRecords = records.filter(r => (r.project || '').trim() === p);
+      scopeLabel = p;
+    }
+    exportPanel.style.display = 'none';
+    exportCsv(targetRecords, scopeLabel);
+  });
+
+  document.getElementById('importBtn').addEventListener('click', () => {
+    document.getElementById('importFile').click();
+  });
+  document.getElementById('importFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => importCsvText(String(reader.result || ''));
+    reader.onerror = () => {
+      csvHint.classList.add('error');
+      csvHint.textContent = 'ファイルの読み込みに失敗しました。';
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  });
+
+  /* ---------------- Init ---------------- */
+  history.replaceState({ view: 'machines' }, '', location.href);
+  loadRecords();
+
+  // 初回オンライン時にアプリ本体をキャッシュし、以降オフラインで起動できるようにする
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {
+        // 登録に失敗しても通常のオンライン動作は継続する
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
