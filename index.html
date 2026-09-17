@@ -225,6 +225,13 @@
   .field-row .field{ margin-top: 18px; }
   .field.narrow{ flex: 0 0 78px; }
   .field.grow{ flex: 1; min-width: 0; }
+  .field-row.worknum-row{ gap: 6px; }
+  .field.narrower{ flex: 0 0 56px; }
+  .field.worknum-sep{ flex: 0 0 10px; }
+  .worknum-dash{
+    text-align:center; padding: 10px 0; color: var(--ink-soft);
+    font-family: var(--mono); font-weight:700; font-size: 14px;
+  }
   .field label{
     display:block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; font-weight: 600;
   }
@@ -354,10 +361,18 @@
         <label for="f-machine">加工機の種類</label>
         <input id="f-machine" type="text" placeholder="例：マシニングセンタ / 旋盤">
       </div>
-      <div class="field-row">
-        <div class="field narrow">
+      <div class="field-row worknum-row">
+        <div class="field narrower">
           <label for="f-worknum">No.</label>
           <select id="f-worknum"></select>
+        </div>
+        <div class="field worknum-sep">
+          <label>&nbsp;</label>
+          <div class="worknum-dash">-</div>
+        </div>
+        <div class="field narrower">
+          <label for="f-worksub">サブ</label>
+          <select id="f-worksub"></select>
         </div>
         <div class="field grow">
           <label for="f-product">製品（ワーク）</label>
@@ -450,7 +465,8 @@
   const fields = {
     project: document.getElementById('f-project'),
     machine: document.getElementById('f-machine'),
-    workNumber: document.getElementById('f-worknum'),
+    workNumMain: document.getElementById('f-worknum'),
+    workSub: document.getElementById('f-worksub'),
     product: document.getElementById('f-product'),
     dim: document.getElementById('f-dim'),
     tool: document.getElementById('f-tool'),
@@ -463,18 +479,33 @@
     memo2: document.getElementById('f-memo2'),
   };
 
-  // ワークナンバー：1〜50のプルダウン
-  (function initWorkNumberOptions(){
-    const sel = fields.workNumber;
+  // ワークナンバー：本番号・サブ番号ともに1〜50のプルダウン
+  function fillNumberOptions(sel, blankLabel){
     const blank = document.createElement('option');
-    blank.value = ''; blank.textContent = '未選択';
+    blank.value = ''; blank.textContent = blankLabel;
     sel.appendChild(blank);
     for(let i = 1; i <= 50; i++){
       const opt = document.createElement('option');
       opt.value = String(i); opt.textContent = String(i);
       sel.appendChild(opt);
     }
-  })();
+  }
+  fillNumberOptions(fields.workNumMain, '未選択');
+  fillNumberOptions(fields.workSub, '未使用');
+
+  // "1" / "1-1" のような文字列 <-> {main, sub} の相互変換
+  function parseWorkNumber(str){
+    const s = (str || '').trim();
+    if(!s) return { main: '', sub: '' };
+    const parts = s.split('-');
+    return { main: (parts[0] || '').trim(), sub: (parts[1] || '').trim() };
+  }
+  function composeWorkNumber(main, sub){
+    const m = (main || '').trim();
+    const s = (sub || '').trim();
+    if(!m) return '';
+    return s ? `${m}-${s}` : m;
+  }
 
   const evalTabs = Array.from(document.querySelectorAll('.eval-tab'));
   const evalLabel = { ok: '◯', warn: '▲', ng: '×' };
@@ -832,7 +863,9 @@
   function fillFieldsFromRecord(r){
     fields.project.value = r.project || '';
     fields.machine.value = r.machine || '';
-    fields.workNumber.value = r.workNumber || '';
+    const wn = parseWorkNumber(r.workNumber);
+    fields.workNumMain.value = wn.main;
+    fields.workSub.value = wn.sub;
     fields.product.value = r.product || '';
     fields.dim.value = r.dim || '';
     fields.tool.value = r.tool || '';
@@ -885,9 +918,19 @@
     formTitle.textContent = '新規記録（同条件）';
     deleteBtn.style.visibility = 'hidden';
     fillFieldsFromRecord(r);
-    const n = parseInt(r.workNumber, 10);
-    if(!isNaN(n)){
-      fields.workNumber.value = String(Math.min(n + 1, 50));
+    const wn = parseWorkNumber(r.workNumber);
+    if(wn.sub){
+      // サブナンバーあり（例：1-1）→ サブ番号のみ繰り上げ
+      const subNum = parseInt(wn.sub, 10);
+      if(!isNaN(subNum)){
+        fields.workSub.value = String(Math.min(subNum + 1, 50));
+      }
+    } else if(wn.main){
+      // サブナンバーなし（例：1）→ 本番号を繰り上げ
+      const mainNum = parseInt(wn.main, 10);
+      if(!isNaN(mainNum)){
+        fields.workNumMain.value = String(Math.min(mainNum + 1, 50));
+      }
     }
     pushFormState();
     overlay.classList.add('open');
@@ -914,7 +957,7 @@
     const now = Date.now();
     const payload = {
       project, machine,
-      workNumber: fields.workNumber.value,
+      workNumber: composeWorkNumber(fields.workNumMain.value, fields.workSub.value),
       product,
       dim: fields.dim.value.trim(),
       tool: fields.tool.value.trim(),
